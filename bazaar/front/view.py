@@ -299,7 +299,6 @@ def workspace_view(request):
 =======
     owner = request.user
     token, _ = Token.objects.get_or_create(user=owner)
-    print(token.key)
 
     return render(request, 'front/yara_rules/my_rules.html', context={'my_rules': my_rules, 'my_token': token.key})
 >>>>>>> 616288b (Start implementing a REST API)
