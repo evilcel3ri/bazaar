@@ -294,14 +294,10 @@ def workspace_view(request):
         my_rules = get_rules(request)
         my_bookmarks = get_user_bookmarks(request)
 
-<<<<<<< HEAD
-    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks})
-=======
     owner = request.user
     token, _ = Token.objects.get_or_create(user=owner)
+    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks})
 
-    return render(request, 'front/yara_rules/my_rules.html', context={'my_rules': my_rules, 'my_token': token.key})
->>>>>>> 616288b (Start implementing a REST API)
 
 
 def my_rule_create_view(request):

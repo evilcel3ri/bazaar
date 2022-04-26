@@ -4,7 +4,13 @@
 
 {% block content %}
 <div class="container">
-
+  <div class="row mt-1">
+    <div class="col-md-5">
+      <div class="alert alert-info">
+        Your API key: <code>{{ my_token }}</code>
+      </div>
+    </div>
+  </div>
   <div class="row justify-content-center mt-4 mb-5">
     <div class="col-md-12">
       <h1>Workspace</h1>
@@ -28,7 +34,6 @@
       </table>
       {% endfor %}
     </div>
-
 
     <div class="col-md-6">
       <h2>Yara hunting</h2>
@@ -145,4 +150,8 @@
 </div>
 
 
+<<<<<<< HEAD
 {% endblock %}
+=======
+{% endblock %}
+>>>>>>> a0fd4a5 (merge)
