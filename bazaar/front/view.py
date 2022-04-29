@@ -28,7 +28,7 @@ from rest_framework.reverse import reverse_lazy
 from bazaar.core.models import Bookmark, Yara
 from bazaar.core.tasks import analyze, retrohunt
 from bazaar.core.utils import get_matching_items_by_dexofuzzy, get_sha256_of_file
-from bazaar.front.forms import BasicUploadForm, SearchForm, SimilaritySearchForm
+from bazaar.front.forms import BasicSearchForm, BasicUploadForm, SearchForm, SimilaritySearchForm
 from bazaar.front.og import generate_og_card
 from bazaar.front.utils import (
     compute_status,
@@ -284,6 +284,50 @@ def remove_bookmark_sample_view(request, sha256):
     return redirect(reverse_lazy('front:report', [sha256]))
 
 
+def get_last_samples():
+    query = {
+        "query": {
+            "query_string": {
+                "default_field": "sha256",
+                "query": "*"
+            }
+        },
+        "highlight": {
+            "fields": {
+                "*": {"pre_tags": ["<mark>"], "post_tags": ["</mark>"]}
+            }
+        },
+        "aggs": {
+            "permissions": {
+                "terms": {"field": "permissions.keyword"}
+            },
+            "domains": {
+                "terms": {"field": "domains_analysis._name.keyword"}
+            },
+            "android_features": {
+                "terms": {"field": "features.keyword"}
+            }
+        },
+        "sort": {"analysis_date": "desc"},
+        "_source": ["apk_hash", "sha256", "uploaded_at", "icon_base64", "handle", "app_name",
+                    "version_code", "size", "dexofuzzy.apk", "quark.threat_level", "vt", "vt_report", "malware_bazaar",
+                    "is_signed", "frosting_data.is_frosted", "features", "andro_cfg.genom"],
+        "size": 5,
+    }
+    es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
+    try:
+        raw_results = es.search(index=settings.ELASTICSEARCH_APK_INDEX, body=query)
+        results = transform_results(raw_results)
+        return results
+    except Exception as e:
+        return []
+
+
+def get_highest_matching_rules(request):
+    rules = get_rules(request)
+    return rules
+
+
 def workspace_view(request):
     if not request.user.is_authenticated:
         return redirect(reverse_lazy('front:home'))
@@ -294,10 +338,13 @@ def workspace_view(request):
         my_rules = get_rules(request)
         my_bookmarks = get_user_bookmarks(request)
 
+        last_samples = get_last_samples()
+        highest_matching_rules = get_highest_matching_rules(request)
+        # trending_malwares = get_trending_malware(request)
+
     owner = request.user
     token, _ = Token.objects.get_or_create(user=owner)
-    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks})
-
+    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks, 'latest_samples': last_samples, 'highest_matching_rules': highest_matching_rules})
 
 
 def my_rule_create_view(request):
@@ -387,18 +434,28 @@ def delete_es_matches(request, rule):
     return
 
 
-def get_rules(request):
+def get_rules(request, full=False):
     es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
     yara_rules = Yara.objects.filter(owner=request.user)
     public_es_index, private_es_index = Yara.get_es_index_names(request.user)
-    q = {
-        'query': {
-            'terms': {
-                'owner': [request.user.id]
-            }
-        },
-        'size': 5000,
-    }
+    if not full:
+        q = {
+            'query': {
+                'terms': {
+                    'owner': [request.user.id]
+                }
+            },
+            'size': 5000,
+        }
+    else:
+        q = {
+            'query': {
+                'terms': {
+                    'matches': 'full',
+                }
+            },
+            'size': 5,
+        }
 
     public_matches, private_matches = None, None
     try:
@@ -473,13 +530,12 @@ def get_andgrocfg_code(request, sha256, foo):
     out = default_storage.open(f'{storage_path}/{foo}').read()
 
     if f'{storage_path}/{foo}'.endswith('.raw'):
-        out_formatted = highlight(out,JavaLexer(), HtmlFormatter(style=U39bStyle, noclasses=True))
+        out_formatted = highlight(out, JavaLexer(), HtmlFormatter(style=U39bStyle, noclasses=True))
         return HttpResponse(out_formatted, content_type="text/html")
     elif f'{storage_path}/{foo}'.endswith('.png'):
         return HttpResponse(out, content_type='image/bmp')
     else:
         return HttpResponse(out, content_type="image/bmp")
-
 
 
 def get_genom(request):
@@ -495,7 +551,8 @@ def get_genom(request):
         threat = 'unknown'
         try:
             genom = report.get('_source').get('andro_cfg').get('genom')
-            threat = report.get('_source').get('vt_report').get('attributes').get('popular_threat_classification').get('suggested_threat_label')
+            threat = report.get('_source').get('vt_report').get('attributes').get(
+                'popular_threat_classification').get('suggested_threat_label')
         except Exception:
             pass
         if genom:

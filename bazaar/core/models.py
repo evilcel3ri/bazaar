@@ -18,6 +18,7 @@ class Bookmark(models.Model):
         es_index = f'bookmark_user_{user.id}'
         return es_index
 
+
 def check_yara_rule(rule):
     try:
         yara.compile(source=rule)
