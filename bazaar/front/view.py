@@ -18,6 +18,8 @@ from django.views.generic import View
 from django_q.tasks import async_task
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers.actions import scan
+from rest_framework.authtoken.models import Token
+from rest_framework.reverse import reverse_lazy
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers.jvm import JavaLexer
@@ -292,7 +294,10 @@ def workspace_view(request):
         my_rules = get_rules(request)
         my_bookmarks = get_user_bookmarks(request)
 
+    owner = request.user
+    token, _ = Token.objects.get_or_create(user=owner)
     return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks})
+
 
 
 def my_rule_create_view(request):
@@ -472,7 +477,7 @@ def get_andgrocfg_code(request, sha256, foo):
         return HttpResponse(out_formatted, content_type="text/html")
     elif f'{storage_path}/{foo}'.endswith('.png'):
         return HttpResponse(out, content_type='image/bmp')
-    else: 
+    else:
         return HttpResponse(out, content_type="image/bmp")
 
 
