@@ -161,13 +161,27 @@
           <h3>Trending malwares</h3>
         </th>
       </tr>
-    </table>
 
-    <div class="col-md-4"></div>
-    <div class="col-md-4">
-      {{ highest_matching_rules }}
-    </div>
-    <div class="col-md-4"></div>
+      {% for sample in trends.samples %}
+      {% for rule in trends.rules %}
+      <tr>
+        <td>
+          <a href="/report/{{sample.sha256}}" target="_blank">
+            {{sample.handle}}
+          </a>
+        </td>
+
+        <td>
+          {{rule.rule.title}} -
+          {{rule.matches|length}} matches
+        </td>
+
+        <td>PROUT</td>
+      </tr>
+
+      {% endfor %}
+      {% endfor %}
+    </table>
   </div>
 
 
