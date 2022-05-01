@@ -323,11 +323,6 @@ def get_last_samples():
         return []
 
 
-def get_highest_matching_rules(request):
-    rules = get_rules(request)
-    return rules
-
-
 def workspace_view(request):
     if not request.user.is_authenticated:
         return redirect(reverse_lazy('front:home'))
@@ -335,16 +330,19 @@ def workspace_view(request):
     my_rules = None
     my_bookmarks = None
     if request.method == 'GET':
+        # TODO: refactorised so there is only one call for all the rules, then filter by user and by score and output those in the tables
         my_rules = get_rules(request)
         my_bookmarks = get_user_bookmarks(request)
-
         last_samples = get_last_samples()
-        highest_matching_rules = get_highest_matching_rules(request)
+        highest_matching_rules = get_best_rules()
         # trending_malwares = get_trending_malware(request)
+        trends = {
+            'samples': last_samples, 'rules': highest_matching_rules
+        }
 
     owner = request.user
     token, _ = Token.objects.get_or_create(user=owner)
-    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'bookmarked_samples': my_bookmarks, 'latest_samples': last_samples, 'highest_matching_rules': highest_matching_rules})
+    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'my_token': token, 'bookmarked_samples': my_bookmarks, 'trends': trends})
 
 
 def my_rule_create_view(request):
@@ -434,29 +432,70 @@ def delete_es_matches(request, rule):
     return
 
 
-def get_rules(request, full=False):
+def get_best_rules():
+    es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
+    yara_rules = Yara.objects.all()
+    my_rules = []
+    public_es_index, _ = Yara.get_es_index_names()
+    # TODO: note fo later: in an ideal world, it would be nice to have the matches.matching_files be set on keyword=true for Elastic search so we can retreive the result sorted instead of sorting them on our own. See: https://stackoverflow.com/questions/63784500/text-fields-are-not-optimised-for-operations-that-require-per-document-elastic
+    q = {
+        "query": {
+            "bool": {
+                "must": [],
+                "filter": [
+                    {
+                        "bool": {
+                            "should": [
+                                {
+                                    "range": {
+                                        "matches.matching_files": {
+                                            "gt": 1
+                                        }
+                                    }
+                                }
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ],
+                "should": [],
+                "must_not": []
+            }
+        },
+        "size": 5000,
+    }
+    public_matches = None
+    public_matches = es.search(index=public_es_index, body=q)['hits']['hits']
+    for rule in yara_rules:
+        my_rule = {
+            'rule': rule,
+            'matching_date': '',
+            'matches': [],
+        }
+        if public_matches:
+            for match in public_matches:
+                if match['_source']['rule'] == str(rule.id):
+                    m = match['_source']
+                    m['sample'] = get_sample_light(match['_source']['matches']['apk_id'])
+                    my_rule['matches'].append(m)
+        if len(my_rule['matches']) > 1:
+            my_rules.append(my_rule)
+
+    return my_rules
+
+
+def get_rules(request):
     es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
     yara_rules = Yara.objects.filter(owner=request.user)
     public_es_index, private_es_index = Yara.get_es_index_names(request.user)
-    if not full:
-        q = {
-            'query': {
-                'terms': {
-                    'owner': [request.user.id]
-                }
-            },
-            'size': 5000,
-        }
-    else:
-        q = {
-            'query': {
-                'terms': {
-                    'matches': 'full',
-                }
-            },
-            'size': 5,
-        }
-
+    q = {
+        'query': {
+            'terms': {
+                'owner': [request.user.id]
+            }
+        },
+        'size': 5000,
+    }
     public_matches, private_matches = None, None
     try:
         private_matches = es.search(index=private_es_index, body=q)['hits']['hits']
