@@ -12,15 +12,15 @@
         <div class="sidebar-sticky">
           <ul class="nav flex-column nav-pills" id="sidebar-tabs" role="tablist" aria-orientation="vertical">
             <li class="nav-item">
-              <a class="nav-link active mb-1 btn btn-outline-primary" data-toggle="pill" href="#dashboard" role="tab"
-                id="dashboard_tab" aria-controls="dashboard_tab" aria-selected="true">
+              <a class="nav-link active mr-1 mb-1 btn btn-outline-primary" data-toggle="pill" href="#dashboard"
+                role="tab" id="dashboard_tab" aria-controls="dashboard_tab" aria-selected="true">
                 <i class="nf nf-fa-dashboard"></i>
                 <p>Dashboard</p>
               </a>
             </li>
 
             <li class="nav-item">
-              <a class="nav-link mb-1 btn btn-outline-primary" data-toggle="pill" href="#bookmarks" role="tab"
+              <a class="nav-link mb-1 mr-1 btn btn-outline-primary" data-toggle="pill" href="#bookmarks" role="tab"
                 id="bookmarks_tab" aria-controls="bookmarks_tab" aria-selected="false">
                 <i class="nf nf-fa-bookmark"></i>
                 <p>Bookmarks</p>
@@ -28,7 +28,7 @@
             </li>
 
             <li class="nav-item">
-              <a class="nav-link mb-1 btn btn-outline-primary" data-toggle="pill" href="#hunting" role="tab"
+              <a class="nav-link mb-1 mr-1 btn btn-outline-primary" data-toggle="pill" href="#hunting" role="tab"
                 id="hunting_tab" aria-controls="hunting_tab" aria-selected="false">
                 <i class="nf nf-fa-binoculars"></i>
                 <p>Yara hunting</p>
@@ -36,7 +36,7 @@
             </li>
 
             <li class="nav-item">
-              <a class="nav-link mb-1 btn btn-outline-primary" data-toggle="pill" href="#trends" role="tab"
+              <a class="nav-link mb-1 mr-1 btn btn-outline-primary" data-toggle="pill" href="#trends" role="tab"
                 id="trends_tab" aria-controls="trends_tab" aria-selected="false">
                 <i class="nf nf-oct-graph"></i>
                 <p>Trends</p>
@@ -44,8 +44,8 @@
             </li>
 
             <li class="nav-item">
-              <a href="#api" class="nav-link mb-1 btn btn-outline-primary" data-toggle="pill" role="tab" id="api_tab"
-                aria-controls="api_tab" aria-selected="false">
+              <a href="#api" class="nav-link mb-1 mr-1 btn btn-outline-primary" data-toggle="pill" role="tab"
+                id="api_tab" aria-controls="api_tab" aria-selected="false">
 
                 <i class="nf nf-fa-key"></i>
                 <p>API key</p>
@@ -57,7 +57,7 @@
         </div>
       </nav>
 
-      <div class="col-md-8 justify-content mt-4 mb-5 tab-content">
+      <div class="col-md-8 justify-content ml-4 mt-4 mb-5 tab-content">
         <div class="tab-pane fade show active" role="tabpanel" aria-labelledby="dashboard_tab" id="dashboard">
           <h2>Dashboard</h2>
           <div class="jumbotron">
@@ -69,15 +69,15 @@
 
         <div class="tab-pane fade" role="tabpanel" aria-labelledby="bookmarks_tab" id="bookmarks">
           <h3>Bookmarks</h3>
-          {% for b in bookmarked_samples %}
           <table class="table table-condensed table-sm">
+            {% for results in bookmarked_samples %}
+            {% for result in results %}
             <tr>
-              <td class="">
-                <a href="{% url 'front:report' b.sample %}">{{b.sample}}</a>
-              </td>
+              {% include "front/m_result_flat.html" with result=result %}
             </tr>
+            {% endfor %}
+            {% endfor %}
           </table>
-          {% endfor %}
         </div>
 
         <div class="tab-pane fade" role="tabpanel" aria-labelledby="hunting_tab" id="hunting">

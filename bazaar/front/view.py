@@ -245,7 +245,11 @@ def og_card_view(request, sha256):
 
 def get_user_bookmarks(request):
     bookmarks = Bookmark.objects.filter(owner=request.user)
-    return bookmarks
+    res = []
+    for sample in bookmarks:
+        apk = get_sample_light(sample.sample)
+        res.append(apk)
+    return res
 
 
 def get_user_bookmark_by_hash(request, sha):
@@ -259,13 +263,15 @@ def add_bookmark_sample_view(request, sha256):
 
     if request.method == 'GET':
         user_bookmarks = get_user_bookmarks(request)
-        if not user_bookmarks.filter(sample=sha256):
-            new_bookmark = Bookmark.objects.create(sample=sha256, owner=request.user)
-            try:
-                new_bookmark.save()
-                user_bookmarks = get_user_bookmarks(request)
-            except Exception as e:
-                logging.exception(e)
+        # TODO fix adding a new bookmark
+        for bookmark in user_bookmarks:
+            if not user_bookmarks.filter(sample=sha256):
+                new_bookmark = Bookmark.objects.create(sample=sha256, owner=request.user)
+                try:
+                    new_bookmark.save()
+                    user_bookmarks = get_user_bookmarks(request)
+                except Exception as e:
+                    logging.exception(e)
 
     return redirect(reverse_lazy('front:report', [sha256]))
 
