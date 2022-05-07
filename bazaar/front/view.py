@@ -331,6 +331,7 @@ def workspace_view(request):
     my_bookmarks = None
     if request.method == 'GET':
         # TODO: refactorised so there is only one call for all the rules, then filter by user and by score and output those in the tables
+        count = get_count_apks()
         my_rules = get_rules(request)
         my_bookmarks = get_user_bookmarks(request)
         last_samples = get_last_samples()
@@ -342,7 +343,7 @@ def workspace_view(request):
 
     owner = request.user
     token, _ = Token.objects.get_or_create(user=owner)
-    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'my_token': token, 'bookmarked_samples': my_bookmarks, 'trends': trends})
+    return render(request, 'front/workspace/workspace_base.html', context={'my_rules': my_rules, 'my_token': token, 'bookmarked_samples': my_bookmarks, 'trends': trends, 'count': count})
 
 
 def my_rule_create_view(request):
@@ -432,12 +433,30 @@ def delete_es_matches(request, rule):
     return
 
 
+def get_count_apks():
+    query = {
+        "aggs": {
+            "type_value": {
+                "value_count": {
+                    "field": "apk_hash.keyword"
+                }
+            }
+        }
+    }
+    es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
+
+    try:
+        count = es.search(index=settings.ELASTICSEARCH_APK_INDEX, body=query)['aggregations']['type_value']['value']
+        return count
+    except:
+        return -1
+
+
 def get_best_rules():
     es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
     yara_rules = Yara.objects.all()
     my_rules = []
     public_es_index, _ = Yara.get_es_index_names()
-    # TODO: note fo later: in an ideal world, it would be nice to have the matches.matching_files be set on keyword=true for Elastic search so we can retreive the result sorted instead of sorting them on our own. See: https://stackoverflow.com/questions/63784500/text-fields-are-not-optimised-for-operations-that-require-per-document-elastic
     q = {
         "query": {
             "bool": {
