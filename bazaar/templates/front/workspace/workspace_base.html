@@ -188,52 +188,52 @@
             {% endfor %}
           </div>
         </div>
-      </div>
 
-      <div class="tab-pane fade" role="tabpanel" aria-labelledby="trends_tab" id="trends">
-        <h3>Trends</h3>
-        <p>What is going on on Pithus? Get the latest happenings!</p>
+        <div class="tab-pane fade" role="tabpanel" aria-labelledby="trends_tab" id="trends">
+          <h3>Trends</h3>
+          <p>What is going on on Pithus? Get the latest happenings!</p>
 
-        <table class="table table-condensend table-md">
-          <tr>
-            <th>
-              <h4>Last samples</h4>
-            </th>
-            <th>
-              <h4>Highest matching Yara rules</h4>
-            </th>
-            <th>
-              <h4>Trending malwares</h4>
-            </th>
-          </tr>
+          <table class="table table-condensend table-md">
+            <tr>
+              <th>
+                <h4>Last samples</h4>
+              </th>
+              <th>
+                <h4>Highest matching Yara rules</h4>
+              </th>
+              <th>
+                <h4>Trending malwares</h4>
+              </th>
+            </tr>
 
-          {% for sample in trends.samples %}
-          {% for rule in trends.rules %}
-          <tr>
-            <td>
-              <a href="/report/{{sample.sha256}}" target="_blank">
-                {{sample.handle}}
-              </a>
-            </td>
+            {% for sample in trends.samples %}
+            {% for rule in trends.rules %}
+            <tr>
+              <td>
+                <a href="/report/{{sample.sha256}}" target="_blank">
+                  {{sample.handle}}
+                </a>
+              </td>
 
-            <td>
-              {{rule.rule.title}} -
-              {{rule.matches|length}} matches
-            </td>
+              <td>
+                {{rule.rule.title}} -
+                {{rule.matches|length}} matches
+              </td>
 
-            <td>PROUT</td>
-          </tr>
+              <td>PROUT</td>
+            </tr>
 
-          {% endfor %}
-          {% endfor %}
-        </table>
-      </div>
+            {% endfor %}
+            {% endfor %}
+          </table>
+        </div>
 
 
-      <div class="tab-pane fade" role="tabpanel" aria-labelledby="api_tab" id="api">
-        <div class="mt-1">
-          <div class="alert alert-info">
-            Your API key: <code>{{ my_token }}</code>
+        <div class="tab-pane fade" role="tabpanel" aria-labelledby="api_tab" id="api">
+          <div class="mt-1">
+            <div class="alert alert-info">
+              Your API key: <code>{{ my_token }}</code>
+            </div>
           </div>
         </div>
       </div>
