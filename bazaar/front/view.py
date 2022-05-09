@@ -1,4 +1,5 @@
 import logging
+from collections import Counter
 from tempfile import NamedTemporaryFile
 
 from androcfg.code_style import U39bStyle
@@ -18,17 +19,20 @@ from django.views.generic import View
 from django_q.tasks import async_task
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers.actions import scan
-from rest_framework.authtoken.models import Token
-from rest_framework.reverse import reverse_lazy
 from pygments import highlight
 from pygments.formatters import HtmlFormatter
 from pygments.lexers.jvm import JavaLexer
+from rest_framework.authtoken.models import Token
 from rest_framework.reverse import reverse_lazy
 
 from bazaar.core.models import Bookmark, Yara
 from bazaar.core.tasks import analyze, retrohunt
 from bazaar.core.utils import get_matching_items_by_dexofuzzy, get_sha256_of_file
-from bazaar.front.forms import BasicSearchForm, BasicUploadForm, SearchForm, SimilaritySearchForm
+from bazaar.front.forms import (
+    BasicUploadForm,
+    SearchForm,
+    SimilaritySearchForm,
+)
 from bazaar.front.og import generate_og_card
 from bazaar.front.utils import (
     compute_status,
@@ -244,7 +248,10 @@ def og_card_view(request, sha256):
 
 
 def get_user_bookmarks(request):
-    bookmarks = Bookmark.objects.filter(owner=request.user)
+    return Bookmark.objects.filter(owner=request.user)
+
+
+def enrich_bookmarks(bookmarks):
     res = []
     for sample in bookmarks:
         apk = get_sample_light(sample.sample)
@@ -263,15 +270,13 @@ def add_bookmark_sample_view(request, sha256):
 
     if request.method == 'GET':
         user_bookmarks = get_user_bookmarks(request)
-        # TODO fix adding a new bookmark
-        for bookmark in user_bookmarks:
-            if not user_bookmarks.filter(sample=sha256):
-                new_bookmark = Bookmark.objects.create(sample=sha256, owner=request.user)
-                try:
-                    new_bookmark.save()
-                    user_bookmarks = get_user_bookmarks(request)
-                except Exception as e:
-                    logging.exception(e)
+        if not user_bookmarks.filter(sample=sha256):
+            new_bookmark = Bookmark.objects.create(sample=sha256, owner=request.user)
+            try:
+                new_bookmark.save()
+                user_bookmarks = get_user_bookmarks(request)
+            except Exception as e:
+                logging.exception(e)
 
     return redirect(reverse_lazy('front:report', [sha256]))
 
@@ -336,15 +341,20 @@ def workspace_view(request):
     my_rules = None
     my_bookmarks = None
     if request.method == 'GET':
-        # TODO: refactorised so there is only one call for all the rules, then filter by user and by score and output those in the tables
-        count = get_count_apks()
+        # TODO: refactor so there is only one call for all the rules, then filter by user and by score and output those in the tables
+        apk_count = get_count_apks()
+        malicious = get_malicious_samples_count()
+        count = {
+            "apks": apk_count,
+            "malicious": malicious
+        }
         my_rules = get_rules(request)
-        my_bookmarks = get_user_bookmarks(request)
+        my_bookmarks = enrich_bookmarks(get_user_bookmarks(request))
         last_samples = get_last_samples()
         highest_matching_rules = get_best_rules()
-        # trending_malwares = get_trending_malware(request)
+        trending_malwares = get_trending_malware()
         trends = {
-            'samples': last_samples, 'rules': highest_matching_rules
+            'samples': last_samples, 'rules': highest_matching_rules, 'trending_malwares': trending_malwares
         }
 
     owner = request.user
@@ -458,6 +468,96 @@ def get_count_apks():
         return -1
 
 
+def get_trending_malware():
+    query = {
+        "query": {
+            "bool": {
+                "must": [],
+                "filter": [
+                    {
+                        "bool": {
+                            "should": [
+                                {
+                                    "range": {
+                                        "vt_report.attributes.popular_threat_classification.popular_threat_name.count": {
+                                            "gt": 1
+                                        }
+                                    }
+                                }
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ],
+                "should": [],
+                "must_not": []
+            }
+        },
+        "size": 5000,
+        "_source": "vt_report.attributes.popular_threat_classification.popular_threat_name.value",
+        "sort": [
+            {
+                "vt_report.attributes.popular_threat_classification.popular_threat_name.count": {
+                    "order": "desc"
+                }
+            }
+        ]
+    }
+    es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
+    try:
+        results = es.search(index=settings.ELASTICSEARCH_APK_INDEX, body=query)['hits']['hits']
+        return Counter(value['_source']['vt_report']['attributes']
+                       ['popular_threat_classification']['popular_threat_name'][0]['value'] for value in results).most_common(5)
+
+    except Exception:
+        return []
+
+
+def get_malicious_samples_count():
+    query = {
+        "query": {
+            "bool": {
+                "must": [],
+                "filter": [
+                    {
+                        "bool": {
+                            "should": [
+                                {
+                                    "range": {
+                                        "vt.malicious": {
+                                            "gt": 1
+                                        }
+                                    }
+                                }
+                            ],
+                            "minimum_should_match": 1
+                        }
+                    }
+                ],
+                "should": [],
+                "must_not": []
+            }
+        },
+        "size": 5000,
+        "_source": "vt",
+        "sort": [
+            {
+                "vt.malicious": {
+                    "order": "desc"
+                }
+            }
+        ]
+    }
+    es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
+    try:
+        results = es.search(index=settings.ELASTICSEARCH_APK_INDEX, body=query)['hits']['hits']
+        res = Counter(value['_source']['vt']['malicious'] for value in results)
+        # FIXME: total() doesn't seem to work, idk why
+        return sum(res.values())
+    except:
+        return -1
+
+
 def get_best_rules():
     es = Elasticsearch(settings.ELASTICSEARCH_HOSTS)
     yara_rules = Yara.objects.all()
@@ -490,23 +590,26 @@ def get_best_rules():
         "size": 5000,
     }
     public_matches = None
-    public_matches = es.search(index=public_es_index, body=q)['hits']['hits']
-    for rule in yara_rules:
-        my_rule = {
-            'rule': rule,
-            'matching_date': '',
-            'matches': [],
-        }
-        if public_matches:
-            for match in public_matches:
-                if match['_source']['rule'] == str(rule.id):
-                    m = match['_source']
-                    m['sample'] = get_sample_light(match['_source']['matches']['apk_id'])
-                    my_rule['matches'].append(m)
-        if len(my_rule['matches']) > 1:
-            my_rules.append(my_rule)
+    try:
+        public_matches = es.search(index=public_es_index, body=q)['hits']['hits']
+        for rule in yara_rules:
+            my_rule = {
+                'rule': rule,
+                'matching_date': '',
+                'matches': [],
+            }
+            if public_matches:
+                for match in public_matches:
+                    if match['_source']['rule'] == str(rule.id):
+                        m = match['_source']
+                        m['sample'] = get_sample_light(match['_source']['matches']['apk_id'])
+                        my_rule['matches'].append(m)
+            if len(my_rule['matches']) > 1:
+                my_rules.append(my_rule)
 
-    return my_rules
+        return my_rules
+    except:
+        return []
 
 
 def get_rules(request):
